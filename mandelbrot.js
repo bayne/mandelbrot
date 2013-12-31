@@ -1,59 +1,64 @@
-var Complex = require('Complex');
-var width, height;
-function getComplex(i,j) {
-    var i = (i - width/2) - width/2;
-    var j = j - height/2;
-    return new Complex(i/(width/2),j/(height/2));
+function Complex(real, im) {
+    this.real = real;
+    this.im = im;
+    this.magnitude = function() {
+        return Math.sqrt(this.real*this.real + this.im*this.im);
+    };
+    this.multiply = function(z) {
+        var a = this.real, b = this.im,
+            c = z.real, d = z.im;
+        var k1 = a*(c + d);
+        var k2 = d*(a + b);
+        var k3 = c*(b - a);
+        this.real = k1 - k2;
+        this.im = k1 + k3;
+        return this;
+    };
+    this.add = function(z) {
+        this.real = this.real + z.real;
+        this.im = this.im + z.im;
+        return this;
+    };
 }
-function cqp(c, lastResult) {
-    var result = new Complex(lastResult.real, lastResult.im);
-    return result.multiply(lastResult).add(c);
+function Coord(x, y, c, i) {
+    this.x = x;
+    this.y = y;
+    this.c = c;
+    this.i = i;
 }
-function getDivergencyRate(result, lastResult, i, j, iteration) {
-    var rate = new Complex(result.real, result.im).magnitude();
-    return rate - lastResult.magnitude();
+function cqp(z, c) {
+    return z.multiply(z).add(c);
 }
-function traverse(callback) {
-    for (var i = 0; i < width; i++) {
-        for (var j = 0; j < height; j++) {
-            callback(i,j);
+function iterate(values, maxIteration) {
+    var coords = [];
+    values.forEach(function(entry) {
+        var complex = entry.c
+        var i = 0;
+        var result = new Complex(0,0);
+        while(i < maxIteration && result.magnitude() < 2.0) {
+            result = cqp(result, complex);
+            i = i + 1;
         }
-    }
-}
-function iterate(lastResult) {
-    var c = 0;
-    var result = create(width, height);
-    traverse(function(i,j) {
-        c = getComplex(i, j);
-        result[i][j] = cqp(c, lastResult[i][j]);
+        coords.push(new Coord(entry.x, entry.y, result, i));
     });
-    return result;
+    return coords;
 }
-function create(width, height) {
-    var newBitmap = [];
-    for (var i = 0; i < width; i++) {
-        newBitmap[i] = [];
-    }
-    return newBitmap;
-}
-function getBitmap(result, lastResult, iteration) {
-    var bitmap = create(width, height);
-    traverse(function(i,j) {
-        bitmap[i][j] = getDivergencyRate(result[i][j], lastResult[i][j], i, j, iteration);
-    });
-    return bitmap;
-}
-function generateBitmap(width, height, iteration, lastResult) {
-    var bitmap = create(width, height);
-    var result = [[]];
-    result = iterate(lastResult);
-    bitmap = getBitmap(result, lastResult, iteration);
-    traverse(function(i,j) {
-        lastResult[i][j] = null;
-    });
-    return {
-        lastResult: result,
-        bitmap: bitmap
+function Transformer(rasterSize) {
+    var centerX = (rasterSize.width/2);
+    var centerY = (rasterSize.height/2);
+    this.forward = function(raster) {
+        raster.forEach(function(entry) {
+            entry.x = (entry.x - centerX)/centerX;
+            entry.y = (entry.y - centerY)/centerY;
+        });
+        return raster;
+    };
+    this.reverse = function(normal) {
+        normal.forEach(function(entry) {
+            entry.x = (entry.x*centerX + centerX);
+            entry.y = (entry.y*centerY + centerY);
+        });
+        return normal;
     };
 }
 window.onload = function() {
@@ -64,53 +69,30 @@ window.onload = function() {
         imageData.data[index+2] = b;
         imageData.data[index+3] = a;
     }
-    function getStatsBitmap(bitmap) {
-        var distribution = [];
-        traverse(function(i,j) {
-            if (isFinite(bitmap[i][j])) {
-                distribution.push(bitmap[i][j]);
-            }
-        });
-        distribution = distribution.sort(function(a,b) { return a - b; });
-        return {
-            median: distribution[distribution.length/2],
-            min: distribution[0],
-            max: distribution[distribution.length-1],
-            q1: distribution[distribution.length/4],
-            q2: distribution[(3*distribution.length)/4],
-            distribution: distribution
-        };
-    }
     var element = document.getElementById('canvas1');
-    width = element.width;
-    height = element.height;
-    var lastResult = create(width, height);
-    traverse(function(i,j) {
-        lastResult[i][j] = Complex.from(0);
-    });
-
-    var object = generateBitmap(width, height, 0, lastResult);
-    lastResult = object.lastResult;
-    var bitmap = object.bitmap;
-    var stats = getStatsBitmap(bitmap);
     var canvas = document.getElementById('canvas1').getContext('2d');
-    var imageData = canvas.createImageData(width, height);
-    var iterations = 40;
-    for(var i =0; i <iterations; i++) {
-        setTimeout(function () {
-            traverse(function(i,j) {
-                var intensity = Math.min(255, bitmap[i][j]);
-                setPixel(imageData, i, j, intensity, 0, 0, 255);
-            });
-            canvas.putImageData(imageData,0,0);
-            object = generateBitmap(width, height, i, lastResult);
-            lastResult = object.lastResult;
-            bitmap = object.bitmap;
-
-        }, 200*i);
+    var imageData = canvas.createImageData(element.width, element.height);
+    var rasterSize = {width: element.width, height: element.height};
+    var raster = [];
+    for(var i = 0; i < rasterSize.width; i++) {
+        for(var j = 0; j < rasterSize.height; j++) {
+            var complex = new Complex(0,0);
+            raster.push(new Coord(i, j, complex, 0));
+        }
     }
-    console.log(imageData);
-    console.log(stats);
-    console.log(bitmap);
+    var transformer = new Transformer(rasterSize);
+    var normals = transformer.forward(raster);
+    normals.forEach(function(entry) {
+        entry.c.real = entry.x;
+        entry.c.im = entry.y;
+    });
+    var max = 20;
+    var result = iterate(normals, max);
+    raster = transformer.reverse(result);
+    raster.forEach(function(entry) {
+        var intensity = (entry.i/max)*255;
+        setPixel(imageData, entry.x, entry.y, intensity, 0, 0, 255);
+    });
+    canvas.putImageData(imageData,0,0);
 };
 
