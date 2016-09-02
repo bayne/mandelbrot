@@ -63,12 +63,12 @@ function Transformer(rasterSize) {
 }
 window.onload = function () {
 
-    function setPixel(imageData, x, y, r, g, b, a) {
-        index = (x + y * imageData.width) * 4;
-        imageData.data[index+0] = r;
-        imageData.data[index+1] = g;
-        imageData.data[index+2] = b;
-        imageData.data[index+3] = a;
+    function setPixel(data, width, x, y, r, g, b, a) {
+        index = (x + y * width) * 4;
+        data[index+0] = r;
+        data[index+1] = g;
+        data[index+2] = b;
+        data[index+3] = a;
     }
     var element = document.getElementById('canvas1');
     var canvas = document.getElementById('canvas1').getContext('2d');
@@ -110,6 +110,8 @@ window.onload = function () {
             return;
         }
         imageData = canvas.getImageData(0,0, element.width, element.height);
+        var data = imageData.data;
+        var width = imageData.width;
 
 
         var max = n;
@@ -130,13 +132,14 @@ window.onload = function () {
             if (intensity < 0) {
                 intensity = -intensity;
             }
-            setPixel(imageData, entry.x, entry.y, 125-intensity, 0, 0, 255);
+            setPixel(data, width, entry.x, entry.y, 125-intensity, 0, 0, 255);
         });
+        imageData.data = data;
         canvas.putImageData(imageData,0,0);
     }
 
     init();
-    setInterval(RenderFrame, 200);
+    setInterval(RenderFrame, 60);
     document.getElementById('go').onclick = function () {
         init();
     };
