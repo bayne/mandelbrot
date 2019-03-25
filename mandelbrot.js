@@ -77,6 +77,45 @@ window.onload = function () {
     var raster = [];
     var transformer = new Transformer(rasterSize);
 
+	var changeView = [];
+    element.addEventListener('mousedown', function (event) {
+		var rect = element.getBoundingClientRect();
+		var x = event.clientX - rect.left;
+		var y = event.clientY - rect.top;
+		changeView.push(new Coord(x, y, null, 0));
+    });
+
+	element.addEventListener('mouseup', function (event) {
+		var rect = element.getBoundingClientRect();
+		var x = event.clientX - rect.left;
+		var y = event.clientY - rect.top;
+		changeView.push(new Coord(x, y, null, 0));
+		var result = transformer.forward(changeView);
+		console.log(result);
+
+		var smallestX = Math.min(result[0].x,result[1].x);
+		var smallestY = Math.min(result[0].y,result[1].y);
+
+		var largestX = Math.max(result[0].x,result[1].x);
+		var largestY = Math.max(result[0].y,result[1].y);
+
+		var distanceX = Math.abs(largestX - smallestX);
+		var distanceY = Math.abs(largestY - smallestY);
+
+		var currentScale = parseFloat(document.getElementById('scale').value);
+		var scale = Math.max(Math.abs(largestX-smallestX), Math.abs(largestY-smallestY))/2;
+
+		var currentX = parseFloat(document.getElementById('xoffset').value);
+		var currentY = parseFloat(document.getElementById('yoffset').value);
+		document.getElementById('xoffset').value = ((smallestX+distanceX/2)*currentScale)+currentX;
+		document.getElementById('yoffset').value = ((smallestY+distanceY/2)*currentScale)+currentY;
+
+		document.getElementById('scale').value = scale*currentScale;
+
+		changeView = [];
+    });
+
+
 
     var n = 0;
     function init() {
@@ -97,8 +136,8 @@ window.onload = function () {
         var yOffset = parseFloat(document.getElementById('yoffset').value) || 0;
 
         raster.forEach(function(entry) {
-            entry.c.real = entry.x/scale+xOffset;
-            entry.c.im = entry.y/scale+yOffset;
+            entry.c.real = entry.x*scale+xOffset;
+            entry.c.im = entry.y*scale+yOffset;
         });
         transformer.reverse(raster);
 
@@ -106,7 +145,7 @@ window.onload = function () {
     }
 
     function RenderFrame() {
-        if (n > 40) {
+        if (n > 80) {
             return;
         }
         imageData = canvas.getImageData(0,0, element.width, element.height);
@@ -136,10 +175,11 @@ window.onload = function () {
         });
         imageData.data = data;
         canvas.putImageData(imageData,0,0);
+
     }
 
     init();
-    setInterval(RenderFrame, 60);
+    setInterval(RenderFrame, 30);
     document.getElementById('go').onclick = function () {
         init();
     };
